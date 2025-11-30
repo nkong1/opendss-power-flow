@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read CSV
-load_data = pd.read_csv(r"dss_files\load_timeseries_data.csv", index_col=0)
+load_data = pd.read_csv(r"raw_data\load_timeseries_data.csv", index_col=0)
 
 # Convert all columns to numeric, coercing any text (e.g., empty cells) to NaN
 load_data = load_data.apply(pd.to_numeric, errors='coerce')

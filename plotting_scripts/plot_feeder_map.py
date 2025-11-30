@@ -5,7 +5,7 @@ import re
 
 # Paths
 timeseries_csv = "results/voltage_timeseries.csv"
-lines_path = "dss_files/Lines.dss"
+lines_path = "raw_data/Lines.dss"
 
 # Substation coordinates
 SUB_BUS = "24ab4116-d257-41b1-960b-481ced9684f1"

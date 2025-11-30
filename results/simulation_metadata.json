@@ -1,5 +1,5 @@
 {
-  "master_dss": "dss_files\\Master.dss",
+  "master_dss": "raw_data\\Master.dss",
   "start_hour": 1837,
   "end_hour": 1837,
   "total_buses": 124,
