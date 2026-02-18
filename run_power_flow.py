@@ -454,7 +454,7 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
 
     # Report convergence issues
     if convergence_failures:
-        print(f"\n⚠ {len(convergence_failures)} hours failed to converge: {convergence_failures[:10]}{'...' if len(convergence_failures) > 10 else ''}")
+        print(f"\n{len(convergence_failures)} hours failed to converge: {convergence_failures[:10]}{'...' if len(convergence_failures) > 10 else ''}")
     
     # Combine all results
     print("Saving results...")
@@ -493,7 +493,7 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
     with open(results_dir / "simulation_metadata.json", 'w') as f:
         json.dump(metadata, f, indent=2)
     
-    print(f"\n✓ Simulation complete!")
+    print(f"\n Simulation complete!")
     print(f"  Results saved to: {results_dir}")
     print(f"  Total buses: {len(base_bus_data)}")
     print(f"  PV buses: {len(pv_buses)}")
