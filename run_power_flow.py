@@ -6,7 +6,7 @@ Runs OpenDSS time-series simulation with PV data and custom load profiles.
 Separate plotting can be done with plot_results.py
 
 Usage:
-    python run_power_flow.py --master raw_data\Master.dss --pv_file raw_data/pv_data.xlsx --load_file raw_data\load_timeseries_data.csv --results results --start_hour 1837 --end_hour 1837
+    python run_power_flow.py --master raw_data\Master.dss --pv_file raw_data/pv_data_final.xlsx --load_file raw_data\load_timeseries_data.csv --results results --start_hour 1837 --end_hour 1837
 """
 
 import argparse
@@ -22,9 +22,9 @@ def load_pv_excel(pv_excel_path):
     """
     Load PV data from an .xlsx file.
     Iterates through every sheet and collects rows containing:
-    hour_index, bus_id, pv_kW (exact names).
+    hour_index, bus_id, grid_power_kW (exact names).
 
-    Missing pv_kW values are filled with 0.
+    Missing grid_power_kW values are filled with 0.
     """
 
     p = Path(pv_excel_path)
@@ -41,7 +41,7 @@ def load_pv_excel(pv_excel_path):
         tmp = pd.read_excel(xls, sheet_name=sheet)
 
         # Ensure required columns exist EXACTLY
-        required = ["hour_index", "bus_id", "pv_kW"]
+        required = ["hour_index", "bus_id", "grid_power_kW"]
         for col in required:
             if col not in tmp.columns:
                 raise ValueError(
@@ -53,7 +53,7 @@ def load_pv_excel(pv_excel_path):
         tmp = tmp[required].copy()
         tmp["hour_index"] = tmp["hour_index"].astype(int)
         tmp["bus_id"] = tmp["bus_id"].astype(str)
-        tmp["pv_kW"] = tmp["pv_kW"].astype(float).fillna(0) / 1000  # fill missing PV with 0
+        tmp["grid_power_kW"] = tmp["grid_power_kW"].astype(float).fillna(0) / 1000  # fill missing PV with 0
         # pv_kW is actually given in watts
 
         df_list.append(tmp)
@@ -136,16 +136,18 @@ def sanitize_name(name):
 
 
 def create_pv_generators(bus_list, gen_prefix="PV"):
-    """Create PV generator objects for all buses"""
     existing_gens = set([n.lower() for n in dss.Generators.AllNames()])
     gen_map = {}
     
     for bus in bus_list:
         gen_name = f"{gen_prefix}_{sanitize_name(bus)}"
         if gen_name.lower() not in existing_gens:
-            # Create generator at bus with zero initial output
-            #cmd = f"New Generator.{gen_name} Bus1={bus} phases=3 kV=0.48 kW=0.0 pf=1.0 Model=1 conn=wye"
-            cmd = f"New Generator.{gen_name} Bus1={bus}.1.2.3.0 phases=3 kV=0.48 kW=0.0 pf=1.0 Model=1 conn=wye"
+            # Look up the bus base voltage
+            dss.Circuit.SetActiveBus(bus)
+            kv_base = dss.Bus.kVBase()  # This is LN voltage in kV
+            kv_ll = kv_base * np.sqrt(3)  # Convert to LL for 3-phase generator
+            
+            cmd = f"New Generator.{gen_name} Bus1={bus}.1.2.3.0 phases=3 kV={kv_ll:.6f} kW=0.0 pf=1.0 Model=1 conn=wye"
             dss.Text.Command(cmd)
         gen_map[bus] = gen_name
     
@@ -299,6 +301,32 @@ def get_line_loading():
     return pd.DataFrame(lines_data)
 
 
+def get_losses_and_generation():
+    losses = dss.Circuit.Losses()
+    total_loss_kw = losses[0] / 1000
+    total_loss_kvar = losses[1] / 1000
+
+    total_pv_kw = 0.0
+    for gen in dss.Generators.AllNames():
+        dss.Generators.Name(gen)
+        total_pv_kw += dss.Generators.kW()
+
+    total_load_kw = 0.0
+    for load in dss.Loads.AllNames():
+        dss.Loads.Name(load)
+        total_load_kw += dss.Loads.kW()
+
+    loss_pct_of_pv = (total_loss_kw / total_pv_kw * 100) if total_pv_kw > 0 else None
+    loss_pct_of_load = (total_loss_kw / total_load_kw * 100) if total_load_kw > 0 else None
+    
+    return {
+        'total_loss_kw': total_loss_kw,
+        'total_loss_kvar': total_loss_kvar,
+        'total_pv_kw': total_pv_kw,
+        'total_load_kw': total_load_kw,
+        'loss_pct_of_pv': loss_pct_of_pv,
+        'loss_pct_of_load': loss_pct_of_load
+    }
 
 def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_hour=8760, verbose=False):
     """Run complete time-series simulation"""
@@ -392,7 +420,7 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
     
     pv_buses = []
     all_line_hourly_data = []
-
+    all_loss_data = []
 
     for hour in tqdm(hours, desc="Solving"):
         
@@ -406,10 +434,9 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
             for _, row in hour_pv.iterrows():
                 bus = row['bus_id']
                 pv_buses.append(bus)
-                kw = row['pv_kW'] 
+                kw = row['grid_power_kW'] 
                 if bus in gen_map:
                     set_generator_kw(gen_map[bus], kw)
-                    print(f"DEBUG: Setting {gen_map[bus]} at Bus {bus} to {kw} kW")
         
         # Update loads for this hour
         if hour in load_grouped.groups:
@@ -448,6 +475,12 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
         line_results = get_line_loading()
         line_results['hour'] = hour
         all_line_hourly_data.append(line_results)
+
+        # Extract loss and generation data
+        loss_data = get_losses_and_generation()
+        loss_data['hour'] = hour
+        loss_data['converged'] = dss.Solution.Converged()
+        all_loss_data.append(loss_data)
 
 
     # check_pv_buses(pv_buses) for debugging
@@ -501,6 +534,15 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
     print(f"  Hours simulated: {end_hour - start_hour + 1}")
     print(f"  Convergence rate: {100 * (1 - len(convergence_failures) / len(hours)):.1f}%")
     
+    if all_loss_data:
+        loss_df = pd.DataFrame(all_loss_data)
+        loss_df.to_csv(results_dir / "losses_timeseries.csv", index=False)
+
+        avg_loss_pct_pv = loss_df['loss_pct_of_pv'].dropna().mean()
+        avg_loss_pct_load = loss_df['loss_pct_of_load'].dropna().mean()
+        print(f"  Avg losses as % of PV generation: {avg_loss_pct_pv:.2f}%")
+        print(f"  Avg losses as % of total load: {avg_loss_pct_load:.2f}%")
+
     return combined_results, summary
 
 def check_pv_buses(pv_buses):

@@ -8,10 +8,11 @@ load_data_path = "raw_data/load_timeseries_data.csv"
 load_data_df = pd.read_csv(load_data_path)
 
 load_data_df['hour_index'] = load_data_df.iloc[:, 0] // 4 + 1
+load_data_df = load_data_df.drop(columns=load_data_df.columns[0]) # drop the first column which is the time index
 hourly_loads = load_data_df.groupby('hour_index').mean().reset_index()
 
 # get the total load for each hour by summing across all load columns
-hourly_loads["Load (kW)"] = hourly_loads.iloc[:, 1:].sum(axis=1)
+hourly_loads["Load (kW)"] = hourly_loads.iloc[:, 1:].sum(axis=1) 
 hourly_loads["Hour"] = range(1, len(hourly_loads) + 1)
 
 hourly_loads = hourly_loads[["Hour", "Load (kW)"]]

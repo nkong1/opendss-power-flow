@@ -6,7 +6,7 @@ Finds the hour with the highest net generation (PV - Load).
 This hour is most critical for voltage analysis as it represents peak reverse power flow.
 
 Usage:
-    python find_critical_hour.py --pv_file raw_data/pv_data.xlsx --load_file raw_data\load_timeseries_data.csv
+    python find_critical_hour.py --pv_file raw_data/pv_data_final.xlsx --load_file raw_data\load_timeseries_data.csv
 """
 
 import argparse
@@ -25,14 +25,14 @@ def load_pv_excel(pv_excel_path):
 
     for sheet in xls.sheet_names:
         tmp = pd.read_excel(xls, sheet_name=sheet)
-        required = ["hour_index", "bus_id", "pv_kW"]
+        required = ["hour_index", "bus_id", "grid_power_kW"]
         for col in required:
             if col not in tmp.columns:
                 raise ValueError(f"Sheet '{sheet}' missing column '{col}'")
         
         tmp = tmp[required].copy()
         tmp["hour_index"] = tmp["hour_index"].astype(int)
-        tmp["pv_kW"] = tmp["pv_kW"].astype(float).fillna(0) / 1000 # data is actually given in watts
+        tmp["grid_power_kW"] = tmp["grid_power_kW"].astype(float).fillna(0) / 1000 # data is actually given in watts
         df_list.append(tmp)
 
     combined = pd.concat(df_list, ignore_index=True)
@@ -72,7 +72,7 @@ def find_critical_hours(pv_df, load_df, top_n=8760, show_plot=False):
     """Find hours with highest net generation (PV - Load)"""
     
     # Calculate total PV per hour
-    pv_hourly = pv_df.groupby('hour_index')['pv_kW'].sum().reset_index()
+    pv_hourly = pv_df.groupby('hour_index')['grid_power_kW'].sum().reset_index()
     pv_hourly.columns = ['hour_index', 'total_pv_kW']
     
     # Calculate total load per hour
