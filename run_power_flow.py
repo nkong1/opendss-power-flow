@@ -6,7 +6,7 @@ Runs OpenDSS time-series simulation with PV data and custom load profiles.
 Separate plotting can be done with plot_results.py
 
 Usage:
-    python run_power_flow.py --master raw_data\Master.dss --pv_file raw_data/pv_data_final.xlsx --load_file raw_data\load_timeseries_data.csv --results results --start_hour 1837 --end_hour 1837
+    python run_power_flow.py --master raw_data/Master.dss --pv_file raw_data/pv_data_final.xlsx --load_file raw_data\load_timeseries_data.csv --results results --start_hour 1837 --end_hour 1837
 """
 
 import argparse
@@ -318,7 +318,7 @@ def get_losses_and_generation():
 
     loss_pct_of_pv = (total_loss_kw / total_pv_kw * 100) if total_pv_kw > 0 else None
     loss_pct_of_load = (total_loss_kw / total_load_kw * 100) if total_load_kw > 0 else None
-    
+
     return {
         'total_loss_kw': total_loss_kw,
         'total_loss_kvar': total_loss_kvar,
@@ -328,7 +328,7 @@ def get_losses_and_generation():
         'loss_pct_of_load': loss_pct_of_load
     }
 
-def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_hour=8760, verbose=False):
+def run_timeseries(master_dss, pv_df, load_df, results_dir, hours, verbose=False):
     """Run complete time-series simulation"""
     results_dir = Path(results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -415,8 +415,7 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
     convergence_failures = []
     
     # Run simulation for each hour
-    hours = range(start_hour, end_hour + 1)
-    print(f"Running simulation for hours {start_hour} to {end_hour}...")
+    print(f"Running simulation for hours {hours[0]} to {hours[-1]}...")
     
     pv_buses = []
     all_line_hourly_data = []
@@ -514,8 +513,7 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
     # Save metadata
     metadata = {
         'master_dss': str(master_dss),
-        'start_hour': start_hour,
-        'end_hour': end_hour,
+        'hours': str(hours),
         'total_buses': len(base_bus_data),
         'pv_buses': len(pv_buses),
         'load_buses_matched': len(matched_load_buses),
@@ -531,7 +529,7 @@ def run_timeseries(master_dss, pv_df, load_df, results_dir, start_hour=1, end_ho
     print(f"  Total buses: {len(base_bus_data)}")
     print(f"  PV buses: {len(pv_buses)}")
     print(f"  Load buses (matched): {len(matched_load_buses)}")
-    print(f"  Hours simulated: {end_hour - start_hour + 1}")
+    print(f"  Hours simulated: {len(hours)}")
     print(f"  Convergence rate: {100 * (1 - len(convergence_failures) / len(hours)):.1f}%")
     
     if all_loss_data:
@@ -585,7 +583,7 @@ def check_pv_buses(pv_buses):
             print(f"    Length: {dss.Lines.Length()} {dss.Lines.Units()} units")
 
 def main():
-    parser = argparse.ArgumentParser(description='Run OpenDSS PV time-series simulation')
+    """parser = argparse.ArgumentParser(description='Run OpenDSS PV time-series simulation')
     parser.add_argument('--master', required=True, help='Path to Master.dss file')
     parser.add_argument('--pv_file', required=True, help='Path to PV .xlsx file')
     parser.add_argument('--load_file', required=True, help='Path to load profile file (.xlsx or .csv)')
@@ -606,6 +604,7 @@ def main():
     load_df = load_load_profiles(args.load_file)
     print(f"  Loaded {len(load_df)} load records")
     
+    
     # Run simulation
     run_timeseries(
         args.master,
@@ -615,6 +614,18 @@ def main():
         start_hour=args.start_hour,
         end_hour=args.end_hour,
         verbose=args.verbose
+    )
+    """
+
+    all_hours = list(range(1, 8761))
+
+    run_timeseries(
+        master_dss="raw_data/Master.dss",
+        pv_df=load_pv_excel("raw_data/pv_data_final.xlsx"),
+        load_df=load_load_profiles("raw_data/load_timeseries_data.csv"),
+        results_dir="results",
+        hours=[1837],
+        verbose=True
     )
 
 

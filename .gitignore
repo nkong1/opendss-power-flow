@@ -2,7 +2,6 @@ results
 .venv
 *.ini
 uw.html
-pf_plots
-pf_plotting
 random_scripts
 results
+results_entire_year
